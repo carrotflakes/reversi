@@ -173,7 +173,7 @@ class Game:
 
     def judge(self):
         black = sum(self.board[y,x] == 1 for y in range(8) for x in range(8))
-        white = sum(self.board[y,x] == 1 for y in range(8) for x in range(8))
+        white = sum(self.board[y,x] == -1 for y in range(8) for x in range(8))
         if black == white:
             return 0
         else:
