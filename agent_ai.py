@@ -57,8 +57,8 @@ class AgentAI:
 
             self.policy_ = tf.reshape(h, (-1, 8, 8))
 
-            self.policy_loss = tf.nn.softmax_cross_entropy_with_logits(
-                labels=tf.reshape(self.true_policy, (-1, 8 * 8)),
+            self.policy_loss = tf.losses.softmax_cross_entropy(
+                onehot_labels=tf.reshape(self.true_policy, (-1, 8 * 8)),
                 logits=tf.reshape(h, (-1, 8 * 8)))
             policy_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
             self.policy_train_op = policy_optimizer.minimize(self.policy_loss)
@@ -78,23 +78,14 @@ class AgentAI:
 
             self.value_ = tf.nn.tanh(tf.reshape(h, (-1,)))
 
-            self.value_loss = (self.value_ - self.true_value) ** 2
+            self.value_loss = tf.losses.mean_squared_error(
+                labels=self.true_value,
+                predictions=self.value_)
             value_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
             self.value_train_op = value_optimizer.minimize(self.value_loss)
 
     def policy(self, game):
-        board = np.array(
-            [
-                [
-                    [
-                        game.board[y,x] == i
-                        for i in [1, -1]
-                    ]
-                    for x in range(8)
-                ]
-                for y in range(8)
-            ],
-            dtype=np.float32)
+        board = game_to_board(game)
         [policy] = self.sess.run(self.policy_, {self.board: [board]})
         return {
             (x, y): policy[y, x]
@@ -102,22 +93,11 @@ class AgentAI:
         }
 
     def value(self, game):
-        board = np.array(
-            [
-                [
-                    [
-                        game.board[y,x] == i
-                        for i in [1, -1]
-                    ]
-                    for x in range(8)
-                ]
-                for y in range(8)
-            ],
-            dtype=np.float32)
+        board = game_to_board(game)
         [value] = self.sess.run(self.value_, {self.board: [board]})
         return value
 
-    def think(self, game):
+    def think(self, game, temperature=0):
         root = Node()
         for _ in range(self.attempt):
             g = game.copy()
@@ -139,7 +119,7 @@ class AgentAI:
             if node.value is None:
                 node.value = self.value(g)
             # backup
-            value = (node.value + 1) / 2
+            value = (node.value + 1) / 2 + (np.random.rand() - 0.5) * temperature
             while node is not None:
                 node.visit_count += 1
                 node.score += value # ?
@@ -148,8 +128,30 @@ class AgentAI:
         pos, _ = max(root.children.items(), key=lambda x: x[1].visit_count)
         return pos
 
-    def learn(self):
-        pass
+    def learn(self, poses_list):
+        boards = []
+        policies = []
+        values = []
+        for poses in poses_list:
+            game = Game()
+            for pos in poses:
+                boards.append(game_to_board(game))
+                policies.append(np.array([[[0, 1][pos == (x, y)] for x in range(8)] for y in range(8)],
+                                         dtype=np.float32))
+                game.step(*pos)
+            values.extend([game.judge()] * len(poses))
+
+        _, policy_loss, _, value_loss = self.sess.run([
+            self.policy_train_op,
+            self.policy_loss,
+            self.value_train_op,
+            self.value_loss
+        ], {
+            self.board: boards,
+            self.true_policy: policies,
+            self.true_value: values
+        })
+        print('policy loss: {} value loss: {}'.format(policy_loss, value_loss))
 
 def conv(name, channel, kernel_size, stride, padding, x):
     with tf.variable_scope(name) as scope:
@@ -163,3 +165,17 @@ def conv(name, channel, kernel_size, stride, padding, x):
             activation=tf.nn.relu,
             kernel_initializer=tf.random_uniform_initializer(-0.01, 0.01),
             kernel_regularizer=tf.contrib.layers.l1_regularizer(0.0001))
+
+def game_to_board(game):
+    return np.array(
+        [
+            [
+                [
+                    game.board[y,x] == i
+                    for i in [1, -1]
+                ]
+                for x in range(8)
+            ]
+            for y in range(8)
+        ],
+        dtype=np.float32)

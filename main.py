@@ -5,7 +5,7 @@ from agent_random import AgentRandom
 import tensorflow as tf
 
 
-def playout(game, agent1, agent2, show=False):
+def playout(game, agent1, agent2, show=False, temperature=0):
     def show_board():
         if show:
             print('=' * 8)
@@ -26,13 +26,14 @@ if __name__ == '__main__':
     sess = tf.Session()
     agent = AgentAI(sess)
     sess.run(tf.global_variables_initializer())
-    '''
+
     for _ in range(100):
-        for _ in range(100):
+        pl = []
+        for _ in range(10):
             game = Game()
-            poses = playout(game, agent, agent)
-        game.learn(TODO)
-    '''
+            poses = playout(game, agent, agent, temperature=0.2)
+            pl.append(poses)
+        agent.learn(pl)
 
     count = 0
     agent2 = AgentRandom()
