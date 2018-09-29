@@ -36,11 +36,13 @@ if __name__ == '__main__':
 
     count = 0
     agent2 = AgentRandom()
-    for _ in range(1):
+    epoch = 50
+    for _ in range(epoch):
         game = Game()
         playout(game, agent, agent2, True)
         count += game.judge() == 1
-    print('result: {}'.format(count))
+    print('result: {}/{}'.format(count, epoch))
+
     '''
     game = Game()
     agent1 = AgentCUI()

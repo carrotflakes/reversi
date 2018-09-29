@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from game import Game
 
 class Node:
 
@@ -17,17 +18,13 @@ class Node:
         best_value = -1
         best_pos = None
         for pos, child in self.children.items():
-            u = turn * C * child.policy * (self.visit_count ** 0.5 / (1 + child.visit_count))
-            value = child.q + u
+            u = C * ((turn * child.policy + 1) / 2) * (self.visit_count ** 0.5 / (1 + child.visit_count))
+            value = child.score / (child.visit_count + 0.001) + u
             if best_value < value:
                 best_node = child
                 best_value = value
                 best_pos = pos
         return best_pos, best_node
-
-    @property
-    def q(self):
-        return self.score / (self.visit_count + 0.001)
 
     @property
     def expanded(self):
