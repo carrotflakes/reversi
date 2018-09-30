@@ -44,6 +44,7 @@ class AgentAI:
         self.attempt = 100
         self.temperature = temperature
 
+        self.is_training = tf.placeholder_with_default(False, shape=[])
         self.board = tf.placeholder(tf.float32, [None, 8, 8, 2])
         self.true_policy = tf.placeholder(tf.float32, [None, 8, 8])
         self.true_value = tf.placeholder(tf.float32, [None])
@@ -51,13 +52,18 @@ class AgentAI:
         batch_size = tf.shape(self.board)[0]
         board_ = tf.concat([self.board, tf.ones([batch_size, 8, 8, 1])], axis=3)
 
-        c_h = conv('conv1', 64, 3, 1, 'same', board_)
-        c_h = conv('conv2', 64, 3, 1, 'same', c_h)
-        c_h = conv('conv3', 64, 3, 1, 'same', c_h)
-        c_h = conv('conv4', 64, 3, 1, 'same', c_h)
-        c_h = conv('conv5', 64, 3, 1, 'same', c_h)
-        c_h = conv('conv6', 64, 3, 1, 'same', c_h)
-        c_h = conv('conv7', 64, 3, 1, 'same', c_h)
+        def layer(name, h):
+            h = conv(name, 64, 3, 1, 'same', h)
+            h = tf.layers.batch_normalization(h, training=self.is_training)
+            return h
+
+        c_h = layer('conv1', board_)
+        c_h = layer('conv2', c_h)
+        c_h = layer('conv3', c_h)
+        c_h = layer('conv4', c_h)
+        c_h = layer('conv5', c_h)
+        c_h = layer('conv6', c_h)
+        c_h = layer('conv7', c_h)
 
         with tf.variable_scope('policy'):
             h = conv('conv1', 1, 3, 1, 'same', c_h)
@@ -84,6 +90,9 @@ class AgentAI:
                 predictions=self.value_)
             value_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
             self.value_train_op = value_optimizer.minimize(self.value_loss)
+
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        self.train_op = tf.group([self.policy_train_op, self.value_train_op, update_ops])
 
     def policy(self, games):
         boards = list(map(game_to_board, games))
@@ -155,15 +164,15 @@ class AgentAI:
                 game.step(*pos)
             values.extend([game.judge()] * len(poses))
 
-        _, policy_loss, _, value_loss = self.sess.run([
-            self.policy_train_op,
+        _, policy_loss, value_loss = self.sess.run([
+            self.train_op,
             self.policy_loss,
-            self.value_train_op,
             self.value_loss
         ], {
             self.board: boards,
             self.true_policy: policies,
-            self.true_value: values
+            self.true_value: values,
+            self.is_training: True
         })
         print('policy loss: {} value loss: {}'.format(policy_loss, value_loss))
 

@@ -37,14 +37,16 @@ if __name__ == '__main__':
     agent = AgentAI(sess, temperature=0.2)
     sess.run(tf.global_variables_initializer())
 
-    for _ in range(100):
+    for epoch in range(100):
         pl = []
-        for _ in range(10):
+        for _ in range(20):
             game = Game()
             poses = playout(game, agent, agent)
             pl.append(poses)
         agent.learn(pl)
-        #eval(agent)
+
+        eval(agent)
+
         game = Game()
         game.step(2, 3)
         [policy] = agent.policy([game])
