@@ -117,23 +117,26 @@ class AgentAI:
         for _ in range(self.attempt):
             g = game.copy()
             node = root
-            while node.expanded:
-                # select
-                pos, node = node.select(g.turn)
-                #print('selected: {}'.format(pos))
-                g.step(*pos)
-                if g.end:
-                    node.value = g.judge()
+            while True:
+                while node.expanded:
+                    # select
+                    pos, node = node.select(g.turn)
+                    #print('selected: {}'.format(pos))
+                    g.step(*pos)
+                    if g.end:
+                        node.value = g.judge()
+                        break
+                if not g.end and node.visit_count >= self.expand_threshold:
+                    # expand
+                    #print('expand')
+                    #g.print()
+                    node.children = {
+                        pos: Node(node, score)
+                        for pos, score in self.policy([g])[0].items()
+                    }
+                    #print([(pos, node.policy) for pos, node in node.children.items()])
+                else:
                     break
-            if node.visit_count >= self.expand_threshold:
-                # expand
-                #print('expand')
-                #g.print()
-                node.children = {
-                    pos: Node(node, score)
-                    for pos, score in self.policy([g])[0].items()
-                }
-                #print([(pos, node.policy) for pos, node in node.children.items()])
             # evaluate
             if node.value is None:
                 node.value = self.value([g])[0]
