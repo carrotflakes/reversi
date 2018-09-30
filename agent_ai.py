@@ -19,7 +19,7 @@ class Node:
         best_pos = None
         for pos, child in self.children.items():
             u = C * ((turn * child.policy + 1) / 2) * (self.visit_count ** 0.5 / (1 + child.visit_count))
-            value = child.score / (child.visit_count + 0.001) + u
+            value = (child.score if turn == 1 else child.visit_count - child.score) / (child.visit_count + 0.001) + u
             if best_value < value:
                 best_node = child
                 best_value = value
@@ -30,13 +30,19 @@ class Node:
     def expanded(self):
         return self.children is not None
 
+    def print(self, indent=0):
+        print('  ' * indent + '{:6f}/{:6f}, p:{}, v:{}'.format(self.score, self.visit_count, self.policy, self.value))
+        if self.expanded:
+            for child in self.children.values():
+                child.print(indent=indent + 1)
 
 class AgentAI:
 
-    def __init__(self, sess):
+    def __init__(self, sess, temperature=0):
         self.sess = sess
         self.expand_threshold = 3
-        self.attempt = 200
+        self.attempt = 100
+        self.temperature = temperature
 
         self.board = tf.placeholder(tf.float32, [None, 8, 8, 2])
         self.true_policy = tf.placeholder(tf.float32, [None, 8, 8])
@@ -45,33 +51,28 @@ class AgentAI:
         batch_size = tf.shape(self.board)[0]
         board_ = tf.concat([self.board, tf.ones([batch_size, 8, 8, 1])], axis=3)
 
-        with tf.variable_scope('policy'):
-            h = conv('conv1', 128, 3, 1, 'same', board_)
-            h = conv('conv2', 128, 3, 1, 'same', h)
-            h = conv('conv3', 128, 3, 1, 'same', h)
-            h = conv('conv4', 128, 3, 1, 'same', h)
-            h = conv('conv5', 128, 3, 1, 'same', h)
-            h = conv('conv6', 128, 3, 1, 'same', h)
-            h = conv('conv7', 128, 3, 1, 'same', h)
-            h = conv('conv8', 1, 3, 1, 'same', h)
+        c_h = conv('conv1', 64, 3, 1, 'same', board_)
+        c_h = conv('conv2', 64, 3, 1, 'same', c_h)
+        c_h = conv('conv3', 64, 3, 1, 'same', c_h)
+        c_h = conv('conv4', 64, 3, 1, 'same', c_h)
+        c_h = conv('conv5', 64, 3, 1, 'same', c_h)
+        c_h = conv('conv6', 64, 3, 1, 'same', c_h)
+        c_h = conv('conv7', 64, 3, 1, 'same', c_h)
 
-            self.policy_ = tf.reshape(h, (-1, 8, 8))
+        with tf.variable_scope('policy'):
+            h = conv('conv1', 1, 3, 1, 'same', c_h)
+            h = tf.reshape(h, (-1, 8 * 8))
+
+            self.policy_ = tf.reshape(tf.nn.softmax(h), (-1, 8, 8))
 
             self.policy_loss = tf.losses.softmax_cross_entropy(
                 onehot_labels=tf.reshape(self.true_policy, (-1, 8 * 8)),
-                logits=tf.reshape(h, (-1, 8 * 8)))
+                logits=h)
             policy_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
             self.policy_train_op = policy_optimizer.minimize(self.policy_loss)
 
         with tf.variable_scope('value'):
-            h = conv('conv1', 128, 3, 1, 'same', board_)
-            h = conv('conv2', 128, 3, 1, 'same', h)
-            h = conv('conv3', 128, 3, 1, 'same', h)
-            h = conv('conv4', 128, 3, 1, 'same', h)
-            h = conv('conv5', 128, 3, 1, 'same', h)
-            h = conv('conv6', 128, 3, 1, 'same', h)
-            h = conv('conv7', 128, 3, 1, 'same', h)
-            h = conv('conv8', 1, 3, 1, 'same', h)
+            h = conv('conv1', 1, 3, 1, 'same', c_h)
             h = tf.reshape(h, (-1, 8 * 8))
             h = tf.layers.dense(h, 128, activation=tf.nn.relu)
             h = tf.layers.dense(h, 1)
@@ -84,20 +85,25 @@ class AgentAI:
             value_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
             self.value_train_op = value_optimizer.minimize(self.value_loss)
 
-    def policy(self, game):
-        board = game_to_board(game)
-        [policy] = self.sess.run(self.policy_, {self.board: [board]})
-        return {
-            (x, y): policy[y, x]
-            for x, y in game.candidates()
-        }
+    def policy(self, games):
+        boards = list(map(game_to_board, games))
+        policies = self.sess.run(self.policy_, {self.board: boards})
+        #print(games[0].board)
+        #print(policies[0])
+        return [
+            {
+                (x, y): policy[y, x]
+                for x, y in game.candidates()
+            }
+            for game, policy in zip(games, policies)
+        ]
 
-    def value(self, game):
-        board = game_to_board(game)
-        [value] = self.sess.run(self.value_, {self.board: [board]})
-        return value
+    def value(self, games):
+        boards = list(map(game_to_board, games))
+        values = self.sess.run(self.value_, {self.board: boards})
+        return values
 
-    def think(self, game, temperature=0):
+    def think(self, game):
         root = Node()
         for _ in range(self.attempt):
             g = game.copy()
@@ -105,27 +111,35 @@ class AgentAI:
             while node.expanded:
                 # select
                 pos, node = node.select(g.turn)
+                #print('selected: {}'.format(pos))
                 g.step(*pos)
                 if g.end:
                     node.value = g.judge()
                     break
-            if node.visit_count > self.expand_threshold:
+            if node.visit_count >= self.expand_threshold:
                 # expand
+                #print('expand')
+                #g.print()
                 node.children = {
                     pos: Node(node, score)
-                    for pos, score in self.policy(g).items()
+                    for pos, score in self.policy([g])[0].items()
                 }
+                #print([(pos, node.policy) for pos, node in node.children.items()])
             # evaluate
             if node.value is None:
-                node.value = self.value(g)
+                node.value = self.value([g])[0]
+                #g.print()
+                #print('value: {}'.format(node.value))
             # backup
-            value = (node.value + 1) / 2 + (np.random.rand() - 0.5) * temperature
+            value = (node.value + 1) / 2 + (np.random.rand() - 0.5) * self.temperature
             while node is not None:
                 node.visit_count += 1
                 node.score += value # ?
                 node = node.parent
 
         pos, _ = max(root.children.items(), key=lambda x: x[1].visit_count)
+        #root.print()
+        #exit()
         return pos
 
     def learn(self, poses_list):
@@ -136,7 +150,7 @@ class AgentAI:
             game = Game()
             for pos in poses:
                 boards.append(game_to_board(game))
-                policies.append(np.array([[[0, 1][pos == (x, y)] for x in range(8)] for y in range(8)],
+                policies.append(np.array([[pos == (x, y) for x in range(8)] for y in range(8)],
                                          dtype=np.float32))
                 game.step(*pos)
             values.extend([game.judge()] * len(poses))

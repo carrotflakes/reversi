@@ -5,7 +5,7 @@ from agent_random import AgentRandom
 import tensorflow as tf
 
 
-def playout(game, agent1, agent2, show=False, temperature=0):
+def playout(game, agent1, agent2, show=False):
     def show_board():
         if show:
             print('=' * 8)
@@ -21,28 +21,34 @@ def playout(game, agent1, agent2, show=False, temperature=0):
         print(game.judge())
     return poses
 
+def eval(agent):
+    count = 0
+    agent2 = AgentRandom()
+    epoch = 50
+    for _ in range(epoch):
+        game = Game()
+        playout(game, agent, agent2)
+        count += game.judge() == 1
+    print('result: {}/{}'.format(count, epoch))
+
 
 if __name__ == '__main__':
     sess = tf.Session()
-    agent = AgentAI(sess)
+    agent = AgentAI(sess, temperature=0.2)
     sess.run(tf.global_variables_initializer())
 
     for _ in range(100):
         pl = []
         for _ in range(10):
             game = Game()
-            poses = playout(game, agent, agent, temperature=0.2)
+            poses = playout(game, agent, agent)
             pl.append(poses)
         agent.learn(pl)
-
-    count = 0
-    agent2 = AgentRandom()
-    epoch = 50
-    for _ in range(epoch):
+        #eval(agent)
         game = Game()
-        playout(game, agent, agent2, True)
-        count += game.judge() == 1
-    print('result: {}/{}'.format(count, epoch))
+        game.step(2, 3)
+        [policy] = agent.policy([game])
+        print(policy)
 
     '''
     game = Game()
