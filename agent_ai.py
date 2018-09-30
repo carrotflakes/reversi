@@ -156,13 +156,14 @@ class AgentAI:
         policies = []
         values = []
         for poses in poses_list:
-            game = Game()
-            for pos in poses:
-                boards.append(game_to_board(game))
-                policies.append(np.array([[pos == (x, y) for x in range(8)] for y in range(8)],
-                                         dtype=np.float32))
-                game.step(*pos)
-            values.extend([game.judge()] * len(poses))
+            for poses in poses_augment(poses):
+                game = Game()
+                for pos in poses:
+                    boards.append(game_to_board(game))
+                    policies.append(np.array([[pos == (x, y) for x in range(8)] for y in range(8)],
+                                             dtype=np.float32))
+                    game.step(*pos)
+                values.extend([game.judge()] * len(poses))
 
         _, policy_loss, value_loss = self.sess.run([
             self.train_op,
@@ -202,3 +203,11 @@ def game_to_board(game):
             for y in range(8)
         ],
         dtype=np.float32)
+
+def poses_augment(poses):
+    return [
+        poses,
+        [(y, x) for (x, y) in poses],
+        [(7 - x, 7 - y) for (x, y) in poses],
+        [(7 - y, 7 - x) for (x, y) in poses]
+    ]
