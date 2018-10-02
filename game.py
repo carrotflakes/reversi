@@ -129,12 +129,19 @@ class Game:
                     break
                 self.board[y_,x_] = self.turn
 
+        def skip():
+            for y in range(8):
+                for x in range(8):
+                    if self.can_put(x, y):
+                        return False
+            return True
+
         self.stone_count += 1
         self.turn *= -1
-        if self.candidates() == []:
+        if skip():
             # skip the turn
             self.turn *= -1
-            if self.candidates() == []:
+            if skip():
                 self.end = True
 
     def candidates(self):
