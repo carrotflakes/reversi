@@ -54,18 +54,18 @@ class Node:
     def expanded(self):
         return self.children is not None
 
-    def print(self, indent=0):
-        print('  ' * indent + '{:6f}/{:6f}, p:{}, v:{}'.format(self.score, self.visit_count, self.policy, self.value))
+    def print(self, path=''):
+        print(path + ' {:6f}/{:6f}, p:{}, v:{}'.format(self.score, self.visit_count, self.policy, self.value))
         if self.expanded:
-            for child in self.children.values():
-                child.print(indent=indent + 1)
+            for pos, child in self.children.items():
+                child.print(path + '{}'.format(pos))
 
 class AgentAI:
 
     def __init__(self, sess, temperature=0):
         self.sess = sess
-        self.expand_threshold = 10
-        self.steps = 6
+        self.expand_threshold = 5
+        self.steps = 10
         self.attempt = 100
         self.batch_size = 64
         self.temperature = temperature
@@ -142,6 +142,7 @@ class AgentAI:
     def infer(self, games):
         boards = list(map(game_to_board, games))
         policies, values = self.sess.run([self.policy_, self.value_], {self.board: boards})
+        #policies, values = [np.array([[1/64 for _ in range(8)] for _ in range(8)])] * len(games), [0.] * len(games)
         return [
             (
                 (lambda game, policy: lambda: [
@@ -173,7 +174,7 @@ class AgentAI:
             leaves.sort(key=lambda x: -x[2])
             leaves = leaves[:self.batch_size]
             if len(leaves) == 0:
-                break
+                continue
             policy_value_pairs = self.infer([game for _, game, _ in leaves])
             for (node, game, num), (policy_fn, value) in zip(leaves, policy_value_pairs):
                 node.value = value
@@ -183,7 +184,10 @@ class AgentAI:
                         for pos, score in policy_fn()
                     }
                 backup(node, num)
-
+        #game_root.print()
+        #if game_root.stone_count >= 62:
+        #    root.print()
+        #print('========')
         pos, _ = max(root.children.items(), key=lambda x: x[1].visit_count)
         return pos
 
