@@ -3,6 +3,7 @@ from agent_ai import AgentAI
 from agent_cui import AgentCUI
 from agent_random import AgentRandom
 import tensorflow as tf
+import time
 
 
 def playout(game, agent1, agent2, show=False):
@@ -39,10 +40,12 @@ if __name__ == '__main__':
 
     for epoch in range(100):
         pl = []
+        start_time = time.time()
         for _ in range(20):
             game = Game()
             poses = playout(game, agent, agent)
             pl.append(poses)
+        print(time.time() - start_time)
         agent.learn(pl)
 
         eval(agent)

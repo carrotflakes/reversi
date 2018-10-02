@@ -3,7 +3,7 @@ import numpy as np
 class Game:
 
     def __init__(self):
-        self.board = np.array([[0] * 8 for _ in range(8)])
+        self.board = np.array([[0] * 8 for _ in range(8)], dtype=np.int64)
         self.board[3,3] = self.board[4,4] = -1
         self.board[3,4] = self.board[4,3] = 1
         self.turn = 1
@@ -195,7 +195,7 @@ class Game:
 
     def copy(self):
         game = Game()
-        game.board = np.array(self.board)
+        game.board = np.array(self.board, dtype=np.int64)
         game.turn = self.turn
         game.stone_count = self.stone_count
         game.end = self.end

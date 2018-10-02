@@ -26,6 +26,30 @@ class Node:
                 best_pos = pos
         return best_pos, best_node
 
+    def search(self, game, n):
+        leaves = [] # [(node, game, n)]
+        def traverse(node, game, n):
+            if not node.expanded:
+                leaves.append((node, game, n))
+                return
+
+            C = 1.0
+            turn = game.turn
+            values = [
+                (child.score if turn == 1 else child.visit_count - child.score) / (child.visit_count + 0.001) \
+                + C * ((turn * child.policy + 1) / 2) * (node.visit_count ** 0.5 / (1 + child.visit_count))
+                for child in node.children.values()
+            ]
+            vsum = sum(values)
+            nums = [round(v * n / vsum) for v in values] # Note: sum(nums) is indefined.
+            for (pos, child), num in zip(node.children.items(), nums):
+                if num > 0:
+                    g = game.copy()
+                    g.step(*pos)
+                    traverse(child, g, num)
+        traverse(self, game, n)
+        return leaves
+
     @property
     def expanded(self):
         return self.children is not None
@@ -40,14 +64,17 @@ class AgentAI:
 
     def __init__(self, sess, temperature=0):
         self.sess = sess
-        self.expand_threshold = 3
+        self.expand_threshold = 10
+        self.steps = 6
         self.attempt = 100
+        self.batch_size = 64
         self.temperature = temperature
 
         self.is_training = tf.placeholder_with_default(False, shape=[])
         self.board = tf.placeholder(tf.float32, [None, 8, 8, 2])
         self.true_policy = tf.placeholder(tf.float32, [None, 8, 8])
         self.true_value = tf.placeholder(tf.float32, [None])
+        self.lr = tf.placeholder(tf.float32, [])
 
         batch_size = tf.shape(self.board)[0]
         board_ = tf.concat([self.board, tf.ones([batch_size, 8, 8, 1])], axis=3)
@@ -74,7 +101,7 @@ class AgentAI:
             self.policy_loss = tf.losses.softmax_cross_entropy(
                 onehot_labels=tf.reshape(self.true_policy, (-1, 8 * 8)),
                 logits=h)
-            policy_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+            policy_optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
             self.policy_train_op = policy_optimizer.minimize(self.policy_loss)
 
         with tf.variable_scope('value'):
@@ -88,7 +115,7 @@ class AgentAI:
             self.value_loss = tf.losses.mean_squared_error(
                 labels=self.true_value,
                 predictions=self.value_)
-            value_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+            value_optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
             self.value_train_op = value_optimizer.minimize(self.value_loss)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -112,7 +139,55 @@ class AgentAI:
         values = self.sess.run(self.value_, {self.board: boards})
         return values
 
-    def think(self, game):
+    def infer(self, games):
+        boards = list(map(game_to_board, games))
+        policies, values = self.sess.run([self.policy_, self.value_], {self.board: boards})
+        return [
+            (
+                (lambda game, policy: lambda: [
+                    ((x, y), policy[y, x])
+                    for x, y in game.candidates()
+                ])(game, policy),
+                value
+            )
+            for game, policy, value in zip(games, policies, values)
+        ]
+
+    def think(self, game_root):
+        def backup(node, num):
+            value = (node.value + 1) / 2 * num
+            while node is not None:
+                node.visit_count += num
+                node.score += value
+                node = node.parent
+
+        root = Node()
+        for _ in range(self.steps):
+            leaves = root.search(game_root, self.attempt)
+            for node, game, num in leaves:
+                if game.end:
+                    node.value = game.judge()
+                    backup(node, num)
+            leaves = list(filter(lambda x: not x[1].end, leaves))
+            np.random.shuffle(leaves)
+            leaves.sort(key=lambda x: -x[2])
+            leaves = leaves[:self.batch_size]
+            if len(leaves) == 0:
+                break
+            policy_value_pairs = self.infer([game for _, game, _ in leaves])
+            for (node, game, num), (policy_fn, value) in zip(leaves, policy_value_pairs):
+                node.value = value
+                if node.visit_count + num >= self.expand_threshold:
+                    node.children = {
+                        pos: Node(node, score)
+                        for pos, score in policy_fn()
+                    }
+                backup(node, num)
+
+        pos, _ = max(root.children.items(), key=lambda x: x[1].visit_count)
+        return pos
+
+    def think_v1(self, game):
         root = Node()
         for _ in range(self.attempt):
             g = game.copy()
@@ -176,7 +251,8 @@ class AgentAI:
             self.board: boards,
             self.true_policy: policies,
             self.true_value: values,
-            self.is_training: True
+            self.is_training: True,
+            self.lr: 0.01,
         })
         print('policy loss: {} value loss: {}'.format(policy_loss, value_loss))
 
