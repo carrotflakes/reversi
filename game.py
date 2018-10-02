@@ -179,13 +179,16 @@ class Game:
         return False
 
     def judge(self):
-        black = sum(self.board[y,x] == 1 for y in range(8) for x in range(8))
-        white = sum(self.board[y,x] == -1 for y in range(8) for x in range(8))
+        black, white = self.count_black_white()
         if black == white:
             return 0
         else:
             return (black > white) * 2 - 1
 
+    def count_black_white(self):
+        return \
+            sum(self.board[y,x] == 1 for y in range(8) for x in range(8)), \
+            sum(self.board[y,x] == -1 for y in range(8) for x in range(8))
 
     def print(self):
         for y in range(8):

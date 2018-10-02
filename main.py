@@ -1,6 +1,7 @@
 from game import Game
 from agent_ai import AgentAI
 from agent_cui import AgentCUI
+from agent_ab import AgentAB
 from agent_random import AgentRandom
 import tensorflow as tf
 import time
@@ -30,15 +31,16 @@ def eval(agent):
         game = Game()
         playout(game, agent, agent2)
         count += game.judge() == 1
-    print('result: {}/{}'.format(count, epoch))
+    print('winning rate: {}/{}'.format(count, epoch))
 
 
 if __name__ == '__main__':
+    #'''
     sess = tf.Session()
     agent = AgentAI(sess, temperature=0.2)
     sess.run(tf.global_variables_initializer())
 
-    for epoch in range(100):
+    for epoch in range(500):
         pl = []
         start_time = time.time()
         for _ in range(20):
@@ -56,8 +58,12 @@ if __name__ == '__main__':
         print(policy)
 
     '''
+    sess = tf.Session()
     game = Game()
-    agent1 = AgentCUI()
-    agent2 = AgentRandom()
-    playout(game, agent1, agent2)
-    '''
+    agent1 = AgentRandom()
+    agent2 = AgentAI(sess)
+    agent3 = AgentAB()
+    sess.run(tf.global_variables_initializer())
+    #eval(agent3)
+    playout(game, agent1, agent3, show=True)
+    #'''
