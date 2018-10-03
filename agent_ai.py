@@ -296,5 +296,9 @@ def poses_augment(poses):
         poses,
         [(y, x) for (x, y) in poses],
         [(7 - x, 7 - y) for (x, y) in poses],
-        [(7 - y, 7 - x) for (x, y) in poses]
+        [(7 - y, 7 - x) for (x, y) in poses],
+        [(x, 7 - y) for (x, y) in poses],
+        [(7 - x, y) for (x, y) in poses],
+        [(y, 7 - x) for (x, y) in poses],
+        [(7 - y, x) for (x, y) in poses]
     ]
