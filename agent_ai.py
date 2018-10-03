@@ -240,12 +240,15 @@ class AgentAI:
         for poses in poses_list:
             for poses in poses_augment(poses):
                 game = Game()
+                turns = []
                 for pos in poses:
                     boards.append(game_to_board(game))
                     policies.append(np.array([[pos == (x, y) for x in range(8)] for y in range(8)],
                                              dtype=np.float32))
+                    turns.append(game.turn)
                     game.step(*pos)
-                values.extend([game.judge()] * len(poses))
+                judge = game.judge()
+                values.extend(t * judge for t in turns)
 
         _, policy_loss, value_loss = self.sess.run([
             self.train_op,
@@ -274,11 +277,12 @@ def conv(name, channel, kernel_size, stride, padding, x):
             kernel_regularizer=tf.contrib.layers.l1_regularizer(0.0001))
 
 def game_to_board(game):
+    turn = game.turn
     return np.array(
         [
             [
                 [
-                    game.board[y,x] == i
+                    game.board[y,x] == i * turn
                     for i in [1, -1]
                 ]
                 for x in range(8)
