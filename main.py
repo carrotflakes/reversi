@@ -7,6 +7,13 @@ import tensorflow as tf
 import time
 
 
+flags = tf.app.flags
+FLAGS = flags.FLAGS
+
+flags.DEFINE_integer('infer', None, 'infer mode')
+flags.DEFINE_integer('resume', None, 'resume training')
+
+
 def playout(game, agent1, agent2, show=False):
     def show_board():
         if show:
@@ -38,9 +45,17 @@ if __name__ == '__main__':
     #'''
     sess = tf.Session()
     agent = AgentAI(sess, temperature=0.2)
-    sess.run(tf.global_variables_initializer())
+    saver = tf.train.Saver()
+
+    if FLAGS.resume is not None:
+        saver.restore(sess, 'model-' + str(FLAGS.resume))
+        global_step = FLAGS.resume
+    else:
+        sess.run(tf.global_variables_initializer())
+        global_step = 0
 
     for epoch in range(500):
+        print(global_step)
         pl = []
         start_time = time.time()
         for _ in range(20):
@@ -49,6 +64,9 @@ if __name__ == '__main__':
             pl.append(poses)
         print(time.time() - start_time)
         agent.learn(pl)
+
+        saver.save(sess, './model', global_step=global_step)
+        global_step += 1
 
         eval(agent)
 
