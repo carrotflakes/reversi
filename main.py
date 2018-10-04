@@ -56,14 +56,16 @@ if __name__ == '__main__':
 
     for epoch in range(500):
         print(global_step)
-        pl = []
-        start_time = time.time()
-        for _ in range(20):
-            game = Game()
-            poses = playout(game, agent, agent)
-            pl.append(poses)
-        print(time.time() - start_time)
-        agent.learn(pl)
+
+        for _ in range(5):
+            pl = []
+            start_time = time.time()
+            for _ in range(10):
+                game = Game()
+                poses = playout(game, agent, agent)
+                pl.append(poses)
+            print(time.time() - start_time)
+            agent.learn(pl)
 
         saver.save(sess, './model', global_step=global_step)
         global_step += 1

@@ -79,12 +79,20 @@ class AgentAI:
         batch_size = tf.shape(self.board)[0]
         board_ = tf.concat([self.board, tf.ones([batch_size, 8, 8, 1])], axis=3)
 
-        def layer(name, h):
-            h = conv(name, 64, 3, 1, 'same', h)
+        def layer(name, inp):
+            h = conv(name + '_0', 64, 3, 1, 'same', inp)
             h = tf.layers.batch_normalization(h, training=self.is_training)
+            h = tf.nn.relu(h)
+            h = conv(name + '_1', 64, 3, 1, 'same', h)
+            h = tf.layers.batch_normalization(h, training=self.is_training)
+            h = h + inp
+            h = tf.nn.relu(h)
             return h
 
-        c_h = layer('conv1', board_)
+        c_h = conv('conv0', 64, 3, 1, 'same', board_)
+        c_h = tf.layers.batch_normalization(c_h, training=self.is_training)
+        c_h = tf.nn.relu(c_h)
+        c_h = layer('conv1', c_h)
         c_h = layer('conv2', c_h)
         c_h = layer('conv3', c_h)
         c_h = layer('conv4', c_h)
@@ -94,6 +102,7 @@ class AgentAI:
 
         with tf.variable_scope('policy'):
             h = conv('conv1', 1, 3, 1, 'same', c_h)
+            h = tf.nn.relu(h)
             h = tf.reshape(h, (-1, 8 * 8))
 
             self.policy_ = tf.reshape(tf.nn.softmax(h), (-1, 8, 8))
@@ -104,6 +113,7 @@ class AgentAI:
 
         with tf.variable_scope('value'):
             h = conv('conv1', 1, 3, 1, 'same', c_h)
+            h = tf.nn.relu(h)
             h = tf.reshape(h, (-1, 8 * 8))
             h = tf.layers.dense(h, 128, activation=tf.nn.relu)
             h = tf.layers.dense(h, 1)
@@ -262,18 +272,15 @@ class AgentAI:
         })
         print('policy loss: {} value loss: {}'.format(policy_loss, value_loss))
 
-def conv(name, channel, kernel_size, stride, padding, x):
+def conv(name, filters, kernel_size, stride, padding, x):
     with tf.variable_scope(name) as scope:
         return tf.layers.conv2d(
             inputs=x,
-            filters=channel,
+            filters=filters,
             kernel_size=kernel_size,
             strides=stride,
             padding=padding,
-            dilation_rate=1,
-            activation=tf.nn.relu,
-            kernel_initializer=tf.random_uniform_initializer(-0.01, 0.01),
-            kernel_regularizer=tf.contrib.layers.l1_regularizer(0.0001))
+            kernel_initializer=tf.random_uniform_initializer(-0.01, 0.01))
 
 def game_to_board(game):
     turn = game.turn
