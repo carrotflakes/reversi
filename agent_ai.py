@@ -101,8 +101,6 @@ class AgentAI:
             self.policy_loss = tf.losses.softmax_cross_entropy(
                 onehot_labels=tf.reshape(self.true_policy, (-1, 8 * 8)),
                 logits=h)
-            policy_optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
-            self.policy_train_op = policy_optimizer.minimize(self.policy_loss)
 
         with tf.variable_scope('value'):
             h = conv('conv1', 1, 3, 1, 'same', c_h)
@@ -115,11 +113,12 @@ class AgentAI:
             self.value_loss = tf.losses.mean_squared_error(
                 labels=self.true_value,
                 predictions=self.value_)
-            value_optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
-            self.value_train_op = value_optimizer.minimize(self.value_loss)
 
+        loss = self.policy_loss + self.value_loss
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
+        minimize_op = optimizer.minimize(loss)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        self.train_op = tf.group([self.policy_train_op, self.value_train_op, update_ops])
+        self.train_op = tf.group([minimize_op, update_ops])
 
     def policy(self, games):
         boards = list(map(game_to_board, games))
