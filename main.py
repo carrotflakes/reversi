@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     if FLAGS.resume is not None:
         saver.restore(sess, 'model-' + str(FLAGS.resume))
-        global_step = FLAGS.resume
+        global_step = FLAGS.resume + 1
     else:
         sess.run(tf.global_variables_initializer())
         global_step = 0
