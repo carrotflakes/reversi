@@ -8,11 +8,16 @@ agent = AgentAI(sess)
 saver = tf.train.Saver()
 saver.restore(sess, 'model-{}'.format(sys.argv[1]))
 game = Game()
-[policy], [value] = sess.run([agent.policy_, agent.value_], {agent.board: [game_to_board(game)]})
+for i in range(60):
+    print('turn {}'.format(game.turn))
+    game.print()
+    [policy], [value] = sess.run([agent.policy_, agent.value_], {agent.board: [game_to_board(game)]})
 
-for y in range(8):
-    for x in range(8):
-        print('{:5f} '.format(policy[y, x]), end='')
-    print()
+    for y in range(8):
+        for x in range(8):
+            print('{:5f} '.format(policy[y, x]), end='')
+        print()
 
-print('value: {}'.format(value))
+    print('value: {}'.format(value))
+
+    game.step(*agent.think(game))
