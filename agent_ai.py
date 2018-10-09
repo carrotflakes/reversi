@@ -64,7 +64,7 @@ class AgentAI:
 
     def __init__(self, sess, temperature=0):
         self.sess = sess
-        self.expand_threshold = 5
+        self.expand_threshold = 3
         self.steps = 10
         self.attempt = 100
         self.batch_size = 64
@@ -102,7 +102,6 @@ class AgentAI:
 
         with tf.variable_scope('policy'):
             h = conv('conv1', 1, 3, 1, 'same', c_h)
-            h = tf.nn.relu(h)
             h = tf.reshape(h, (-1, 8 * 8))
 
             self.policy_ = tf.reshape(tf.nn.softmax(h), (-1, 8, 8))
@@ -112,10 +111,11 @@ class AgentAI:
                 logits=h)
 
         with tf.variable_scope('value'):
-            h = conv('conv1', 1, 3, 1, 'same', c_h)
+            h = conv('conv1', 1, 1, 1, 'same', c_h)
+            h = tf.layers.batch_normalization(h, training=self.is_training)
             h = tf.nn.relu(h)
             h = tf.reshape(h, (-1, 8 * 8))
-            h = tf.layers.dense(h, 128, activation=tf.nn.relu)
+            h = tf.layers.dense(h, 64, activation=tf.nn.relu)
             h = tf.layers.dense(h, 1)
 
             self.value_ = tf.nn.tanh(tf.reshape(h, (-1,)))
@@ -163,7 +163,7 @@ class AgentAI:
             for game, policy, value in zip(games, policies, values)
         ]
 
-    def think(self, game_root):
+    def think_v2(self, game_root):
         def backup(node, num):
             value = (node.value + 1) / 2 * num
             while node is not None:
@@ -200,7 +200,7 @@ class AgentAI:
         pos, _ = max(root.children.items(), key=lambda x: x[1].visit_count)
         return pos
 
-    def think_v1(self, game):
+    def think(self, game):
         root = Node()
         for _ in range(self.attempt):
             g = game.copy()
