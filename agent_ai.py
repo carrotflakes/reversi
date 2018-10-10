@@ -66,7 +66,7 @@ class AgentAI:
         self.sess = sess
         self.expand_threshold = 3
         self.steps = 10
-        self.attempt = 100
+        self.attempt = 300
         self.batch_size = 64
         self.temperature = temperature
 
@@ -158,7 +158,7 @@ class AgentAI:
                     ((x, y), policy[y, x])
                     for x, y in game.candidates()
                 ])(game, policy),
-                value
+                value * game.turn # fix value to black-side
             )
             for game, policy, value in zip(games, policies, values)
         ]
@@ -227,7 +227,7 @@ class AgentAI:
                     break
             # evaluate
             if node.value is None:
-                node.value = self.value([g])[0]
+                node.value = self.value([g])[0] * g.turn # fix value to black-side
                 #g.print()
                 #print('value: {}'.format(node.value))
             # backup

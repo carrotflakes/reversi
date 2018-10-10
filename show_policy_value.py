@@ -4,7 +4,7 @@ from agent_ai import AgentAI, game_to_board
 import sys
 
 sess = tf.Session()
-agent = AgentAI(sess)
+agent = AgentAI(sess, temperature=0.2)
 saver = tf.train.Saver()
 saver.restore(sess, 'model-{}'.format(sys.argv[1]))
 game = Game()
