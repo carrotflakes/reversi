@@ -30,15 +30,21 @@ def playout(game, agent1, agent2, show=False):
         print(game.judge())
     return poses
 
-def eval(agent):
-    count = 0
+def eval(agent, epoch=50):
     agent2 = AgentRandom()
-    epoch = 50
-    for _ in range(epoch):
+    count1 = 0
+    count2 = 0
+    for i in range(epoch):
         game = Game()
-        playout(game, agent, agent2)
-        count += game.judge() == 1
-    print('winning rate: {}/{}'.format(count, epoch))
+        if i % 2 == 0:
+            playout(game, agent, agent2)
+            count1 += game.judge() == 1
+            count2 += game.judge() == -1
+        else:
+            playout(game, agent2, agent)
+            count1 += game.judge() == -1
+            count2 += game.judge() == 1
+    print('win: {}, lose: {}, draw: {}'.format(count1, count2, epoch - count1 - count2))
 
 
 if __name__ == '__main__':
