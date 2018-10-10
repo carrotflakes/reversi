@@ -18,5 +18,8 @@ class AgentCUI:
         i = -1
         while not (0 <= i < len(candidates)):
             print('> ', end='')
-            i = int(input())
+            try:
+                i = int(input())
+            except:
+                pass
         return candidates[i]
