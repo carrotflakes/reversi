@@ -192,7 +192,8 @@ class AgentAI:
                         pos: Node(node, score)
                         for pos, score in policy_fn()
                     }
-                backup(node, num)
+                else:
+                    backup(node, num)
         #game_root.print()
         #if game_root.stone_count >= 62:
         #    root.print()
