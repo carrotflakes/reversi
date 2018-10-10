@@ -5,11 +5,18 @@ class AgentCUI:
 
     def think(self, game):
         print('your turn({})'.format('o x'[game.turn+1]))
-        game.print()
-        x, y = -1, -1
-        while (x, y) not in game.candidates():
-            print('xy> ', end='')
-            xy = input()
-            x, y = map(int, xy)
-            x, y = x-1, y-1
-        return (x, y)
+        candidates = game.candidates()
+
+        for y in range(8):
+            for x in range(8):
+                if (x, y) in candidates:
+                    print('{:2d}'.format(candidates.index((x, y))), end='')
+                else:
+                    print([' o', ' _', ' x'][game.board[y,x]+1], end='')
+            print()
+
+        i = -1
+        while not (0 <= i < len(candidates)):
+            print('> ', end='')
+            i = int(input())
+        return candidates[i]
