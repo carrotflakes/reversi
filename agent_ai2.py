@@ -12,19 +12,29 @@ class Node:
         self.policy = policy # -1 ~ 1
         self.value = None # -1 ~ 1
 
-    def select(self, turn):
-        C = 1.0
-        best_node = None
-        best_value = -1
-        best_pos = None
-        for pos, child in self.children.items():
-            u = C * ((turn * child.policy + 1) / 2) * (self.visit_count ** 0.5 / (1 + child.visit_count))
-            value = (child.score if turn == 1 else child.visit_count - child.score) / (child.visit_count + 0.001) + u
-            if best_value < value:
-                best_node = child
-                best_value = value
-                best_pos = pos
-        return best_pos, best_node
+    def search(self, game, n):
+        leaves = [] # [(node, game, n)]
+        def traverse(node, game, n):
+            if not node.expanded:
+                leaves.append((node, game, n))
+                return
+
+            C = 1.0
+            turn = game.turn
+            values = [
+                (child.score if turn == 1 else child.visit_count - child.score) / (child.visit_count + 0.001) \
+                + C * ((turn * child.policy + 1) / 2) * (node.visit_count ** 0.5 / (1 + child.visit_count))
+                for child in node.children.values()
+            ]
+            vsum = sum(values)
+            nums = [round(v * n / vsum) for v in values] # Note: sum(nums) is indefined.
+            for (pos, child), num in zip(node.children.items(), nums):
+                if num > 0:
+                    g = game.copy()
+                    g.step(*pos)
+                    traverse(child, g, num)
+        traverse(self, game, n)
+        return leaves
 
     @property
     def expanded(self):
@@ -41,7 +51,9 @@ class AgentAI:
     def __init__(self, sess, temperature=0):
         self.sess = sess
         self.expand_threshold = 3
-        self.attempt = 300
+        self.steps = 500
+        self.attempt = 500
+        self.batch_size = 128
         self.temperature = temperature
 
         self.is_training = tf.placeholder_with_default(False, shape=[])
@@ -122,46 +134,57 @@ class AgentAI:
         values = self.sess.run(self.value_, {self.board: boards})
         return values
 
-    def think(self, game):
-        root = Node()
-        for _ in range(self.attempt):
-            g = game.copy()
-            node = root
-            while True:
-                while node.expanded:
-                    # select
-                    pos, node = node.select(g.turn)
-                    #print('selected: {}'.format(pos))
-                    g.step(*pos)
-                    if g.end:
-                        node.value = g.judge()
-                        break
-                if not g.end and node.visit_count >= self.expand_threshold:
-                    # expand
-                    #print('expand')
-                    #g.print()
-                    node.children = {
-                        pos: Node(node, score)
-                        for pos, score in self.policy([g])[0].items()
-                    }
-                    #print([(pos, node.policy) for pos, node in node.children.items()])
-                else:
-                    break
-            # evaluate
-            if node.value is None:
-                node.value = self.value([g])[0] * g.turn # fix value to black-side
-                #g.print()
-                #print('value: {}'.format(node.value))
-            # backup
-            value = (node.value + 1) / 2 + (np.random.rand() - 0.5) * self.temperature
+    def infer(self, games):
+        boards = list(map(game_to_board, games))
+        policies, values = self.sess.run([self.policy_, self.value_], {self.board: boards})
+        #policies, values = [np.array([[1/64 for _ in range(8)] for _ in range(8)])] * len(games), [0.] * len(games)
+        return [
+            (
+                (lambda game, policy: lambda: [
+                    ((x, y), policy[y, x])
+                    for x, y in game.candidates()
+                ])(game, policy),
+                value * game.turn # fix value to black-side
+            )
+            for game, policy, value in zip(games, policies, values)
+        ]
+
+    def think(self, game_root):
+        def backup(node, num):
+            value = (node.value + 1) / 2 * num
             while node is not None:
-                node.visit_count += 1
-                node.score += value # ?
+                node.visit_count += num
+                node.score += value
                 node = node.parent
 
+        root = Node()
+        for _ in range(self.steps):
+            leaves = root.search(game_root, self.attempt)
+            for node, game, num in leaves:
+                if game.end:
+                    node.value = game.judge()
+                    backup(node, num)
+            leaves = list(filter(lambda x: not x[1].end, leaves))
+            np.random.shuffle(leaves)
+            leaves.sort(key=lambda x: -x[2])
+            leaves = leaves[:self.batch_size]
+            if len(leaves) == 0:
+                continue
+            policy_value_pairs = self.infer([game for _, game, _ in leaves])
+            for (node, game, num), (policy_fn, value) in zip(leaves, policy_value_pairs):
+                node.value = value
+                if node.visit_count + num >= self.expand_threshold:
+                    node.children = {
+                        pos: Node(node, score)
+                        for pos, score in policy_fn()
+                    }
+                else:
+                    backup(node, num)
+        #game_root.print()
+        #if game_root.stone_count >= 62:
+        #    root.print()
+        #print('========')
         pos, _ = max(root.children.items(), key=lambda x: x[1].visit_count)
-        #root.print()
-        #exit()
         return pos
 
     def learn(self, poses_list):
