@@ -40,6 +40,8 @@ def handle_message(data):
                 x, y = list(map(int, data['text']))
                 x -= 1
                 y -= 1
+                if (x, y) not in game.candidates():
+                    raise Exception()
                 game.step(x, y)
                 client.rtm_send_message(channel, render_game(game))
                 while not game.end and game.turn == -1:
