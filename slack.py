@@ -13,7 +13,7 @@ sess = tf.Session()
 agent = AgentAI(sess, temperature=0.0)
 saver = tf.train.Saver()
 saver.restore(sess, 'model-' + sys.argv[2])
-game = Game()
+channel_game_table = {}
 
 def render_game(game):
     numbers = ':one: :two: :three: :four: :five: :six: :seven: :eight:'.split()
@@ -27,11 +27,11 @@ def render_game(game):
     return '\n'.join(parts)
 
 def handle_message(data):
-    global game
     if data.get('type') == 'message' and data.get('user') != self_user_id:
         channel = data.get('channel', None)
         if data.get('text', '') == 'オセロ':
             game = Game()
+            channel_game_table[channel] = game
             message = '対局を開始します！'
             message += '\n' + render_game(game)
             client.rtm_send_message(channel, message)
@@ -40,6 +40,7 @@ def handle_message(data):
                 x, y = list(map(int, data['text']))
                 x -= 1
                 y -= 1
+                game = channel_game_table.get(channel, Game())
                 if (x, y) not in game.candidates():
                     raise Exception()
                 game.step(x, y)
