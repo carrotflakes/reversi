@@ -55,7 +55,7 @@ def handle_message(data):
             except:
                 pass
 
-if client.rtm_connect():
+if client.rtm_connect(auto_reconnect=True):
     self_user_id = client.server.login_data['self']['id']
     print('ready.')
 
