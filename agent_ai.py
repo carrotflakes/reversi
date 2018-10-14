@@ -81,7 +81,7 @@ class AgentAI:
             self.policy_ = tf.reshape(tf.nn.softmax(h), (-1, 8, 8))
 
             self.policy_loss = tf.losses.softmax_cross_entropy(
-                onehot_labels=tf.reshape(self.true_policy, (-1, 8 * 8)),
+                onehot_labels=label_smoothing(tf.reshape(self.true_policy, (-1, 8 * 8))),
                 logits=h)
 
         with tf.variable_scope('value'):
@@ -230,3 +230,7 @@ def poses_augment(poses):
         [(y, 7 - x) for (x, y) in poses],
         [(7 - y, x) for (x, y) in poses]
     ]
+
+def label_smoothing(inputs, epsilon=0.1):
+    K = inputs.get_shape().as_list()[-1] # number of channels
+    return ((1-epsilon) * inputs) + (epsilon / K)
